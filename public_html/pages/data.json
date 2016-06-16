@@ -1,0 +1,164 @@
+{
+    "bacc-rdu-mac": {
+        "nodes": [
+            {
+                "symbol": "BACC<br/>RDU<br/>MAC",
+                "size": 56,
+                "edges": 1,
+                "id": 0
+            },
+            {
+                "symbol": "BACC<br/>FQDN",
+                "size": 56,
+                "edges": 1,
+                "id": 1
+            },
+            {
+                "symbol": "BACC<br/>GIAddress",
+                "size": 56,
+                "edges": 1,
+                "id": 2
+            },
+            {
+                "symbol": "Device<br/>Registered<br/>State",
+                "size": 56,
+                "edges": 1,
+                "id": 3
+            },
+            {
+                "symbol": "Device<br/>Provisioned<br/>State",
+                "size": 56,
+                "edges": 1,
+                "id": 4
+            },
+            {
+                "symbol": "BACC<br/>MAC",
+                "size": 56,
+                "edges": 1,
+                "id": 5
+            },
+            {
+                "symbol": "BACC<br/>RDU",
+                "size": 56,
+                "edges": 1,
+                "id": 6
+            },
+            {
+                "symbol": "DHCP<br/>Criteria",
+                "size": 56,
+                "edges": 1,
+                "id": 7
+            },
+            {
+                "symbol": "BACC<br/>baccDEV<br/>TYPE",
+                "size": 56,
+                "edges": 1,
+                "id": 8
+            },
+            {
+                "symbol": "BACC<br/>DEVCLASS",
+                "size": 56,
+                "edges": 1,
+                "id": 9
+            },
+            {
+                "symbol": "BACC<br/>DEVTYPE",
+                "size": 56,
+                "edges": 1,
+                "id": 10
+            },
+            {
+                "symbol": "BACC<br/>PG",
+                "size": 56,
+                "edges": 1,
+                "id": 11
+            },
+            {
+                "symbol": "BACC<br/>COS",
+                "size": 56,
+                "edges": 1,
+                "id": 12
+            }
+        ],
+        "links": [
+            {
+                "source": 0,
+                "target": 1,
+                "edgeType": 1,
+                "id": 21
+            },
+            {
+                "source": 0,
+                "target": 2,
+                "edgeType": 1,
+                "id": 22
+            },
+            {
+                "source": 0,
+                "target": 3,
+                "edgeType": 1,
+                "id": 23
+            },
+            {
+                "source": 0,
+                "target": 4,
+                "edgeType": 1,
+                "id": 24
+            },
+            {
+                "source": 0,
+                "target": 5,
+                "edgeType": 1,
+                "id": 25
+            },
+            {
+                "source": 0,
+                "target": 6,
+                "edgeType": 1,
+                "id": 26
+            },
+            {
+                "source": 0,
+                "target": 7,
+                "edgeType": 1,
+                "id": 27
+            },
+            {
+                "source": 0,
+                "target": 8,
+                "edgeType": 1,
+                "id": 28
+            },
+            {
+                "source": 0,
+                "target": 9,
+                "edgeType": 1,
+                "id": 29
+            },
+            {
+                "source": 0,
+                "target": 10,
+                "edgeType": 1,
+                "id": 30
+            },
+            {
+                "source": 0,
+                "target": 11,
+                "edgeType": 1,
+                "id": 31
+            },
+            {
+                "source": 0,
+                "target": 12,
+                "edgeType": 1,
+                "id": 32
+            },
+            {
+                "source": 12,
+                "target": 0,
+                "edgeType": 1,
+                "id": 33
+            }
+        ]
+    }
+}
