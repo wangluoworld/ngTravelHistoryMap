@@ -1,253 +1,226 @@
 
 var quickApp = angular.module('quickApp', ['ngRoute']);
 
-quickApp.directive('xnetForceDirectedX', ['$timeout', function ($timeout) {
+quickApp.directive('xnetForceDirectedX', ['$timeout', '$http', function ($timeout, $http) {
         return {
             restrict: 'A',
             scope: true,
-            templateUrl: './pages/xnet-force-directed-x.tpl.html',
+            templateUrl: './ng-travel-history-map.tpl.html',
             link: function ($scope, $element, $attrs) {
-                $timeout(function () {
-                    var getForceRadius = d3.scale.sqrt().range([0, 6]);
-                    var nodeSelected;
-                    var edgeSelected;
-                    var highLightId = 'selectionGlove';
-                    var highLightWidth = 7;
-                    var highLightColor = "#0000A0";
-                    var svg;
-                    var force;
+                var init = function (cities, years) {
                     var eWidth = $element.width();
                     var eHeight = $element.height();
-                    var charge = -2200;
 
-                    // THIS IS STUPIDLY DONE
+                    var time_lkup = [{"year": "Start", "t": 0}];
+                    for (var i = 0; i < years.length; i++) {
+                        time_lkup.push({
+                            "year": years[i],
+                            "t": i + 1
+                        });
+                    }
+                    time_lkup.push({"year": "End", "t": years.length + 1});
 
-                    var setHighlightFilter = function (svg) {
-                        var color = d3.rgb(highLightColor);
-                        var colorMatrix = "0 0 0 " + color.r / 256 + " 0 0 0 0 0 " + color.g / 256 + " 0 0 0 0 " + color.b / 256 + " 0 0 0 1 0";
-                        var defs = svg.append("defs");
-                        var filter = defs.append("filter")
-                                .attr("id", highLightId)
-                                .attr("x", "-20%")
-                                .attr("y", "-20%")
-                                .attr("width", "140%")
-                                .attr("height", "140%");
-                        filter.append("feColorMatrix")
-                                .attr("type", "matrix")
-                                .attr("values", colorMatrix);
-                        filter.append("feGaussianBlur")
-                                .attr("stdDeviation", highLightWidth)
-                                .attr("result", "coloredBlur");
-                        var feMerge = filter.append("feMerge");
-                        feMerge.append("feMergeNode")
-                                .attr("in", "coloredBlur");
-                        feMerge.append("feMergeNode")
-                                .attr("in", "SourceGraphic");
-                    };
+                    //speed of animation
+                    var speed = 2000;
 
+                    //declare some vars for use later
+                    var topo, projection, path, svg, g, throttleTimer;
+                    //declare tooltip
+                    var tooltip = d3.select("#map").append("div").attr("class", "tooltip hidden");
+                    //add in zoom behaviour
+                    var zoom = d3.behavior.zoom().scaleExtent([1, 9]).on("zoom", move);
 
-                    var nodeClicked = function (dataPoint) {
-                        // never select the root node
-                        if (dataPoint.id === 0) {
-                            return;
-                        }
-                        // remove the previous selection filter if there is one
-                        if (nodeSelected) {
-                            nodeSelected.style("filter", "");
-                        }
-                        // add the selection filter to the circle 
-                        // and keep a copy of the selected node
-                        nodeSelected = d3.select(this)
-                                .select("circle")
-                                .style("filter", "url(#" + highLightId + ")");
-                    };
+                    //add in resize bahviour
+                    var resize = d3.select(window).on("resize", redraw);
 
-                    var edgeClicked = function () {
-                        // remove the previous selection filter if there is one
-                        if (edgeSelected) {
-                            edgeSelected.style("filter", "");
-                        }
-                        // add the selection filter to the line 
-                        // and keep a copy of the selected edge
-                        edgeSelected = d3.select(this)
-                                .select("line")
-                                .style("filter", "url(#" + highLightId + ")");
-                    };
+                    //create functions:
 
-                    var newDataSimulation = function (jsonData, dataItem) {
-                        // empty pervious
-                        $('#dataDisplay').empty();
-                        // add a new svg element
-                        svg = d3.select("#dataDisplay").append("svg")
+                    //setup the mapping svg based on width and height of the browser window
+                    function setup() {
+                        projection = d3.geo.mercator()
+                                .center([0, 40]) //long and lat starting position
+                                .translate([(eWidth / 2), (eHeight / 2)])
+                                .scale(eWidth / 7);
+
+                        path = d3.geo.path().projection(projection);
+
+                        svg = d3.select("#map").append("svg")
                                 .attr("width", eWidth)
-                                .attr("height", eHeight);
-                        // add the highlight filter element
-                        setHighlightFilter(svg);
-                        // begin the display process
-                        graphTheData(jsonData[dataItem]);
-                    };
+                                .attr("height", eHeight)
+                                .attr("class", "map")
+                                .call(zoom)
+                                .append("g");
 
-                    var graphInitialize = function () {
-                        $.getJSON("./pages/data.json", function (json) {
-                            newDataSimulation(json, 'bacc-rdu-mac');
-                        });
-                    };
+                        g = svg.append("g");
+                    }
 
-                    var graphTheData = function (graph) {
-                        var nodesList, linksList;
-                        nodesList = graph.nodes;
-                        linksList = graph.links;
+                    //draw the world map
+                    function draw(topo) {
+                        svg.append("path").attr("d", path);
+                        var country = g.selectAll(".country").data(topo);
+                        country.enter().insert("path")
+                                .attr("class", "country")
+                                .attr("d", path)
+                    }
 
-                        force = d3.layout.force()
-                                .nodes(nodesList)
-                                .links(linksList)
-                                .size([eWidth, eHeight])
-                                .charge(charge)
-                                .chargeDistance(300)
-                                .friction(0.95)
-                                .linkStrength(function (d) {
-                                    return 1;//d.edgeType/3;
+                    //animated addition of cities onto the world map. called by play button
+                    $scope.addcities = function () {
+
+                        g.selectAll("circle.points").remove();
+
+                        var locations = g.selectAll("circle")
+                                .data(cities).enter().append("circle")
+                                .style("fill", "red")
+                                .style("opacity", 1);
+
+                        locations.transition().ease("linear")
+                                .delay(function (d) {
+                                    return speed * d.t;
                                 })
-                                .linkDistance(function (d) {
-                                    return getForceRadius(d.source.size) + getForceRadius(d.target.size) + 120;
+                                .attr("cx", function (d) {
+                                    return projection([d.lon, d.lat])[0];
                                 })
-                                .on("tick", tick);
+                                .attr("cy", function (d) {
+                                    return projection([d.lon, d.lat])[1];
+                                })
+                                .attr("r", function (d) {
+                                    return d.mag;
+                                })
+                                .transition().duration(500).ease("linear")
+                                .style("opacity", 0.6)
+                                .attr("class", "points");
 
-
-                        var links = force.links(),
-                                nodes = force.nodes(),
-                                link = svg.selectAll(".link"),
-                                node = svg.selectAll(".node");
-
-                        var n = nodes.length;
-                        nodes.forEach(function (d, i) {
-                            var angle = i * (Math.PI * 2) / n;
-                            d.y = Math.sin(angle) + eHeight / 2;
-                            d.x = Math.cos(angle) + eWidth / 2;
-                            if(i === 0) {
-                                d.fixed = true;
-                            }
-                            //d.x = eWidth / 2;
-                            //d.y = eHeight / 2;
-                            //d.x = d.y = eWidth / n * i;
-                        });
-
-                        buildData();
-
-                        function buildData() {
-                            var color = d3.scale.category20();
-                            // update link data
-                            link = link.data(links, function (d) {
-                                return d.id;
+                        ;
+                        //tooltip
+                        locations.on("mousemove", function (d, i) {
+                            var mouse = d3.mouse(svg.node()).map(function (d) {
+                                return parseInt(d);
                             });
+                            tooltip.classed("hidden", false)
+                                    .attr("style", "left:" + (mouse[0] + offsetL) + "px;top:" + (mouse[1] + offsetT) + "px")
+                                    .html(d.place);
+                        })
+                                .on("mouseout", function (d, i) {
+                                    tooltip.classed("hidden", true);
+                                });
 
-                            // Create new links
-                            link.enter().insert("g", ".node")
-                                    .attr("class", "link")
-                                    .each(function (d) {
-                                        // Add bond line
-                                        d3.select(this)
-                                                .append("line")
-                                                .style("stroke-width", function (d) {
-                                                    return (d.edgeType * 3 - 2) * 2 + "px";
-                                                });
+                        //offsets for tooltips
+                        var offsetL = document.getElementById('map').offsetLeft + 10;
+                        var offsetT = document.getElementById('map').offsetTop - 30;
 
-                                        // If double add second line
-                                        d3.select(this)
-                                                .filter(function (d) {
-                                                    return d.edgeType >= 2;
-                                                }).append("line")
-                                                .style("stroke-width", function (d) {
-                                                    return (d.edgeType * 2 - 2) * 2 + "px";
-                                                })
-                                                .attr("class", "double");
 
-                                        d3.select(this)
-                                                .filter(function (d) {
-                                                    return d.edgeType === 3;
-                                                }).append("line")
-                                                .attr("class", "triple");
+                        var dispaytime = svg.selectAll(".text")
+                                .data(time_lkup).enter().append("text")
+                                .style("opacity", 1)
+                                .style("fill", "#000000")
+                                .transition().delay(function (d) {
+                            return speed * d.t;
+                        })
+                                .attr("x", eWidth / 2)
+                                .attr("y", eHeight / 2)
+                                .attr("class", "display_time")
+                                .style("font-size", "50px")
+                                .attr("text-anchor", "middle")
+                                .text(function (d) {
+                                    return d.year;
+                                })
+                                .transition().duration(speed).style("opacity", 0);
 
-                                        // Give bond the power to be selected
-                                        d3.select(this).on("click", edgeClicked);
-                                    });
+                    }
 
-                            // Update node data
-                            node = node.data(nodes, function (d) {
-                                return d.id;
+
+                    //redraw. this happens when you resize your browser window. it calls throttle which in turn calls redraw. it runs setup and draw again
+                    function redraw() {
+                        d3.select('svg.map').remove();
+                        setup(eWidth, eHeight);
+                        draw(topo);
+                    }
+
+
+                    //move this is called when you change the zoom on the map. map is rescaled and city objects are rescaled
+                    function move() {
+                        var t = d3.event.translate;
+                        s = d3.event.scale;
+                        zscale = s;
+                        var h = eHeight / 4;
+                        
+                        console.log(s)
+
+                        t[0] = Math.min(
+                                (eWidth / eHeight) * (s - 1),
+                                Math.max(eWidth * (1 - s), t[0])
+                                );
+
+                        t[1] = Math.min(
+                                h * (s - 1) + h * s,
+                                Math.max(eHeight * (1 - s) - h * s, t[1])
+                                );
+
+                        zoom.translate(t);
+                        g.attr("transform", "translate(" + t + ")scale(" + s + ")");
+
+                        //adjust the country hover stroke width based on zoom level
+                        d3.selectAll(".country").style("stroke-width", 1.5 / s);
+
+                        //adjust the locations size
+                        g.selectAll("circle").attr("r", 4 / s);
+
+                    }
+
+                    //run setup and create initial maps
+
+                    setup();
+                    d3.json("./js/world-50m.json", function (error, world) {
+                        var countries = topojson.feature(world, world.objects.countries).features;
+                        topo = countries;
+                        draw(topo);
+                    });
+                };
+
+                $timeout(function () {
+                    $http.get('./js/convertcsv.json').then(
+                            function (response) {
+                                var features = response.data;
+                                var cities = [];
+                                var years = [];
+
+                                var featureItem = function (feature) {
+
+                                    var getTime = function (time) {
+                                        var date = new Date(time)
+                                        var year = date.getFullYear();
+                                        if ($.inArray(year, years) === -1) {
+                                            years.push(year);
+                                        }
+                                    }
+
+                                    var fObj = {
+                                        place: feature.place,
+                                        lon: feature.longitude, // 0
+                                        lat: feature.latitude, // 1
+                                        t: (Math.floor(Math.random() * (14 - 1)) + 1) + (Math.floor(Math.random() * (100 - 1)) + 1) / 100,
+                                        t2: getTime(feature.time),
+                                        mag: feature.mag
+                                    };
+                                    return fObj;
+                                };
+
+                                for (var i in features) {
+                                    cities.push(featureItem(features[i]));
+                                    if (i > 1200) {
+                                        break;
+                                    }
+                                }
+
+                                years.sort();
+
+                                init(cities, years);
+                            },
+                            function (response) {
+                                console.error('Server returned an error or scene data file load: ' + response.status);
+                                return response.status;
                             });
-
-                            // Create new nodes
-                            node.enter().append("g")
-                                    .attr("class", "node")
-                                    .each(function (d) {
-                                        // Add node circle
-                                        d3.select(this)
-                                                .append("circle")
-                                                .attr("r", function (d) {
-                                                    return getForceRadius(d.size);
-                                                })
-                                                .style("fill", function (d) {
-                                                    return color(d.symbol);
-                                                });
-
-                                        var wh = Math.sqrt(2) * d.size;
-                                        var diag = wh / 2;
-
-                                        // Add node symbol
-                                        d3.select(this)
-                                                .append("foreignObject")
-                                                .attr("text-anchor", "middle")
-                                                .attr({
-                                                    height: wh,
-                                                    width: wh,
-                                                    transform: 'translate(-' + diag + ',-' + diag + ')'
-                                                })
-                                                .html(function (d) {
-                                                    return "<div class='node-item' style='width: " + wh + "px; height: " + wh + "px;'><span class='node-text'>" + d.symbol + "</span></div>";
-                                                });
-
-                                        // Give node the power to be selected
-                                        d3.select(this).on("click", nodeClicked);
-
-                                        // Grant node the power of gravity	
-                                        d3.select(this).call(force.drag);
-                                    });
-
-                            force.start();
-                        }
-
-                        function tick() {
-                            //Update old and new elements
-                            link.selectAll("line")
-                                    .attr("x1", function (d) {
-                                        return d.source.x;
-                                    })
-                                    .attr("y1", function (d) {
-                                        return d.source.y;
-                                    })
-                                    .attr("x2", function (d) {
-                                        return d.target.x;
-                                    })
-                                    .attr("y2", function (d) {
-                                        return d.target.y;
-                                    });
-
-                            node.attr("transform", function (d) {
-                                    return "translate(" + d.x + "," + d.y + ")";
-                            });
-                        }
-                    };
-                    graphInitialize();
-
-
-                    $scope.$on('eventWatcher::resize',
-                            function (broadcastEvent, args) {
-                                $timeout(function () {
-                                    graphInitialize();
-                                }, 0);
-                            });
-                }, 500);
+                }, 250);
             }
         };
     }]);
